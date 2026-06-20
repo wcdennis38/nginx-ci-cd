@@ -1,12 +1,12 @@
-permissions:
-  contents: write
-.github/workflows/deploy.yml
 name: CI-CD Pipeline
 
 on:
   push:
     branches: [ "main" ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,55 +18,26 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
-        aws-access-key-id: ${{ AKIASGCBBGEZOHM3GMHG }}
-        aws-secret-access-key: ${{ 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 }}
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-east-1
 
     - name: Login to Amazon ECR
-      run: |
-        aws ecr get-login-password --region us-east-1 | docker login --wcdennis --password-stdin 150460248370.dkr.ecr.us-east-1.amazonaws.com
-
-    - name: Build Docker image
-      run: docker build -t nginx-app 
-
-    - name: Tag image
-      run: docker tag nginx-app:latest 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
-      
-
-    - name: Push image
-      run: docker push 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ AKIASGCBBGEZP7XQLZ54 }}
-        aws-secret-access-key: ${{ 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 }}
-        aws-region: us-east-1
-
-    - name: Login to ECR
       run: |
         aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 150460248370.dkr.ecr.us-east-1.amazonaws.com
 
     - name: Build Docker image
       run: docker build -t nginx-app .
 
-    - name: Tag image
+    - name: Tag Docker image
       run: docker tag nginx-app:latest 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
 
-    - name: Push image
+    - name: Push Docker image
       run: docker push 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
 
-    # 👇 ADD THIS BLOCK HERE
     - name: Update Kubernetes manifest
       run: |
-        git clone https://github.com/YOUR_USERNAME/k8s-gitops-platform.git
+        git clone https://github.com/wcdennis/k8s-gitops-platform.git
         cd k8s-gitops-platform
 
         IMAGE_TAG=latest

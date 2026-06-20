@@ -29,6 +29,51 @@ jobs:
 
     - name: Tag image
       run: docker tag nginx-app:latest 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
+      
 
     - name: Push image
       run: docker push 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ AKIASGCBBGEZP7XQLZ54 }}
+        aws-secret-access-key: ${{ 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 }}
+        aws-region: us-east-1
+
+    - name: Login to ECR
+      run: |
+        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 150460248370.dkr.ecr.us-east-1.amazonaws.com
+
+    - name: Build Docker image
+      run: docker build -t nginx-app .
+
+    - name: Tag image
+      run: docker tag nginx-app:latest 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
+
+    - name: Push image
+      run: docker push 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
+
+    # 👇 ADD THIS BLOCK HERE
+    - name: Update Kubernetes manifest
+      run: |
+        git clone https://github.com/YOUR_USERNAME/k8s-gitops-platform.git
+        cd k8s-gitops-platform
+
+        IMAGE_TAG=latest
+
+        sed -i "s|image:.*nginx-app.*|image: 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:${IMAGE_TAG}|g" apps/nginx/deployment.yaml
+
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+
+        git add .
+        git commit -m "Update image tag to latest"
+        git push

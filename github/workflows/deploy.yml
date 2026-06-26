@@ -1,52 +1,60 @@
-name: CI-CD Pipeline
+name: Deploy to EKS
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
 
-permissions:
-  contents: write
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: "150460248370"
+  ECR_REPOSITORY: node-k8s-app
+  CLUSTER_NAME: enterprise-eks
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-    - name: Login to Amazon ECR
-      run: |
-        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 150460248370.dkr.ecr.us-east-1.amazonaws.com
+      - name: Verify AWS credentials
+        run: aws sts get-caller-identity
 
-    - name: Build Docker image
-      run: docker build -t nginx-app .
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Tag Docker image
-      run: docker tag nginx-app:latest 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
+      - name: Build Docker image
+        run: |
+          docker build -t $ECR_REPOSITORY:latest .
 
-    - name: Push Docker image
-      run: docker push 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:latest
+      - name: Tag Docker image
+        run: |
+          docker tag $ECR_REPOSITORY:latest \
+          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
 
-    - name: Update Kubernetes manifest
-      run: |
-        git clone https://github.com/wcdennis/k8s-gitops-platform.git
-        cd k8s-gitops-platform
+      - name: Push Docker image
+        run: |
+          docker push \
+          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:latest
 
-        IMAGE_TAG=latest
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --name $CLUSTER_NAME \
+            --region $AWS_REGION
 
-        sed -i "s|image:.*nginx-app.*|image: 150460248370.dkr.ecr.us-east-1.amazonaws.com/nginx-app:${IMAGE_TAG}|g" apps/nginx/deployment.yaml
-
-        git config user.name "github-actions"
-        git config user.email "github-actions@github.com"
-
-        git add .
-        git commit -m "Update image tag to latest"
-        git push
+      - name: Deploy to EKS
+        run: |
+          kubectl apply -f k8/
